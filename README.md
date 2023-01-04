@@ -21,6 +21,13 @@ python pdfParser.py /location/of/pdf/filename.pdf
 
 It may be useful to alias this program so you can run it from other location in your environment.
 
+### TODO
+
+- Automatic built in OCR scanning
+- Remove tables and diagrams
+- Output options
+- Convert the pdf to markdown
+
 ## License
 
 <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-nc-sa/4.0/88x31.png" /></a><br />This work is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/">Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License</a>.
