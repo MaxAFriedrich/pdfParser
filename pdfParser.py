@@ -26,7 +26,6 @@ from os import path
 NO_HEADER_LINES = 5
 NO_FOOTER_LINES = 4
 WINDOW_SIZE = 8
-REMOVAL_THRESHOLD = 0.8
 PERCENTILE_TARGET = 75
 
 
@@ -43,7 +42,7 @@ def similar(a: str, b: str) -> float:
     return SequenceMatcher(None, a, b).ratio()
 
 
-def parse_file(file_name: str) -> list:
+def parse_file(file_name: str,first:int,last:int) -> list:
     """takes a pdf file path and converts it to a list of pages that can then be parsed
 
     Args:
@@ -56,7 +55,16 @@ def parse_file(file_name: str) -> list:
         list: list of pages
     """
     parsed_text = []
+    i=1
     for page_layout in extract_pages(file_name):
+        if i<first:
+            i+=1
+            continue
+        elif i>last and last !=0:
+            break
+        else:
+            i+=1
+
         page = {
             "text": [],
             "height": page_layout.height,
@@ -170,7 +178,7 @@ def score_lines(parsed_text: list, page: int, new_page: int, target_hf: str) -> 
     return parsed_text
 
 
-def remove_lines(parsed_text: list, page: int, target_hf: str) -> list:
+def remove_lines(parsed_text: list, page: int, target_hf: str,threshold:float) -> list:
     """removes lines with a high score/probability iof being a header or footer line
 
     Args:
@@ -204,12 +212,12 @@ def remove_lines(parsed_text: list, page: int, target_hf: str) -> list:
         parsed_text[page]["text"][line]["score"] = max(
             percentile(line_scores, PERCENTILE_TARGET), max(sort(line_scores)[-3:])
         )
-        if parsed_text[page]["text"][line]["score"] > REMOVAL_THRESHOLD:
+        if parsed_text[page]["text"][line]["score"] > threshold:
             parsed_text[page]["text"][line]["removed"] = True
     return parsed_text
 
 
-def do_page(parsed_text: list, page: int, result_queue: Queue):
+def do_page(parsed_text: list, page: int, result_queue: Queue,threshold:float):
     """process a page
 
     Args:
@@ -224,12 +232,12 @@ def do_page(parsed_text: list, page: int, result_queue: Queue):
             continue
         parsed_text = score_lines(parsed_text, page, new_page, "header")
         parsed_text = score_lines(parsed_text, page, new_page, "footer")
-    parsed_text = remove_lines(parsed_text, page, "header")
-    parsed_text = remove_lines(parsed_text, page, "footer")
+    parsed_text = remove_lines(parsed_text, page, "header",threshold)
+    parsed_text = remove_lines(parsed_text, page, "footer",threshold)
     result_queue.put([parsed_text[page], page])
 
 
-def find_hf(parsed_text: list) -> list:
+def find_hf(parsed_text: list,threshold:float) -> list:
     """parses the document and finds all of the headers and footers
 
     Args:
@@ -241,7 +249,7 @@ def find_hf(parsed_text: list) -> list:
     result_queue = Queue()
     threads = []
     for page in range(len(parsed_text)):
-        t = Thread(target=do_page, args=(parsed_text, page, result_queue))
+        t = Thread(target=do_page, args=(parsed_text, page, result_queue,threshold))
         t.start()
         threads.append(t)
     for t in threads:
@@ -266,14 +274,16 @@ def clean_text(text: str) -> str:
     return text
 
 
-def clean_file(file_name: str):
+def clean_file(file_name: str,debug:bool,first:int, last:int,threshold:float):
     """takes a file as input and then parses and cleans the file
 
     Args:
         file_name (str): name of the file to be cleaned
     """
-    parsed_text = parse_file(file_name)
-    parsed_text = find_hf(parsed_text)
+    parsed_text = parse_file(file_name,first,last)
+    parsed_text = find_hf(parsed_text,threshold)
+    if debug:
+        print(parsed_text)
     out_text = "".join(
         [
             "".join(
@@ -295,8 +305,12 @@ def clean_file(file_name: str):
 if __name__ == "__main__":
     parser = ArgumentParser(prog='pdfParser', description='Convert a PDF to a plain text document with improved formatting and without headers or footers.')
     parser.add_argument("filenames", nargs="+", help="A list of filenames to be processed. The completed files are saved with the same name and a .txt extension.")
+    parser.add_argument("-d","--debug",default=False,help="Returns a python dictionary to stdout.",action="store_true")
+    parser.add_argument("-f","--first_page",default=1,help="First page to parse.",type=int)
+    parser.add_argument("-l","--last_page",default=0,help="Last page to parse.", type=int)
+    parser.add_argument("-t","--removal_threshold",default=0.8,help="The threshold for text removal.",type=float)
     args = parser.parse_args()
     filenames = args.filenames
     for file_name in filenames:
-        t = Thread(target=clean_file, args=(file_name,))
+        t = Thread(target=clean_file, args=(file_name,args.debug,args.first_page,args.last_page,args.removal_threshold))
         t.start()
